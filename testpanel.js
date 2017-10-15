@@ -1,11 +1,19 @@
+// AUTHOR: Matthew
+// PURPOSE: Add a simple test runner loaded client-side only.
 var testService = (function createTestService(mount) {
+  // Check if `__TEST__` has been set.
+  // NOTE: Not used yet.
   var window = (typeof window === 'undefined') ? {} : window
   window.__TEST__ = true
   
+  // Only add the panel if given a mounting element.
   if (mount) { 
     addTestPanel(mount)
   }
 
+  // Add a panel to contain the test output.
+  // Adds a toggle button to show/hide the panel.
+  // And a container that the test messages render to.
   function addTestPanel(mount) {
     var panel = document.createElement('div')
     var toggle = document.createElement('button')
@@ -24,12 +32,18 @@ var testService = (function createTestService(mount) {
     mount.insertBefore(panel, mount.firstChild)
   }
 
+  // Adds show/hide toggling functionality to the toggle button.
+  // TODO: Move this into the addTestPanel(:mount) function.
   document.getElementById('panel-button').addEventListener('click', function(e) {
     var panel = document.getElementById('test-panel')
     var isShowing = panel.style.right == '0px'
     panel.style.right = isShowing ? '-300px' : '0px'
   })
 
+  // Adds an expandable `<details/>` element to the container element.
+  // @params message: string (will go in the <summary/> tag of the details title)
+  // @params trace: string (will go into pre-formatted <pre/> tag of the details body)
+  // @params color: string (default 'black')
   function writeToPanel(message, trace, color) {
     color = color || 'black'
     var details = document.createElement('details')
@@ -53,6 +67,9 @@ var testService = (function createTestService(mount) {
     panel.appendChild(details)
   }
 
+  // ** Assertion Functions **
+
+  // assertEquals compares two values for equality.
   function assertEquals(actual, expected, message) {
     message = message || (actual.toString() + ' == ' + expected.toString())
     if (actual == expected) {
@@ -62,9 +79,10 @@ var testService = (function createTestService(mount) {
     }
   }
   
+  // Assertion API object
   var testService = {
     assertEquals: assertEquals,
   }
   
   return testService
-})(document.getElementById('mount'))
+})(document.getElementById('mount')) // Replace this entry element.
