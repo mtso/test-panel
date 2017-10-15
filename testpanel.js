@@ -1,4 +1,4 @@
-var testService = (function addTestPanel(mount) {
+var testService = (function createTestService(mount) {
   var window = (typeof window === 'undefined') ? {} : window
   window.__TEST__ = true
   
