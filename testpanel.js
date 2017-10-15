@@ -1,6 +1,10 @@
 var testService = (function addTestPanel(mount) {
   var window = (typeof window === 'undefined') ? {} : window
   window.__TEST__ = true
+  
+  if (mount) { 
+    addTestPanel(mount)
+  }
 
   function addTestPanel(mount) {
     var panel = document.createElement('div')
@@ -18,22 +22,12 @@ var testService = (function addTestPanel(mount) {
     panel.appendChild(toggle)
     panel.appendChild(container)
     mount.insertBefore(panel, mount.firstChild)
-    // mount.appendChild(panel)  
-  }
-  
-  if (mount) { 
-    addTestPanel(mount)
   }
 
-  $('#panel-button').on('click', function(e) {
-    var panel = $('#test-panel')
-    var isShown = panel.css('right') == '0px'
-
-    if (isShown) {
-      panel.css({right: '-300px'})
-    } else {
-      panel.css({right: '0px'})
-    }
+  document.getElementById('panel-button').addEventListener('click', function(e) {
+    var panel = document.getElementById('test-panel')
+    var isShowing = panel.style.right == '0px'
+    panel.style.right = isShowing ? '-300px' : '0px'
   })
 
   function writeToPanel(message, trace, color) {
@@ -68,7 +62,9 @@ var testService = (function addTestPanel(mount) {
     }
   }
   
-  return {
+  var testService = {
     assertEquals: assertEquals,
   }
+  
+  return testService
 })(document.getElementById('mount'))
