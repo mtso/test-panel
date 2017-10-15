@@ -1,0 +1,27 @@
+body {
+  background-color: pink;
+  margin: 0;
+}
+
+.test-panel {
+  position: fixed;
+  height: 100vh;
+  background-color: white;
+  z-index: 3000;
+  width: 300px;
+  right: 0px;
+}
+
+.test-container {
+  padding: 10px;
+  height: 100vh;
+  overflow-y: scroll;
+  z-index: 200;
+  background-color: white;
+}
+
+.panel-button {
+  position: absolute;
+  left: -28px;
+  font-size: 1em;
+}
