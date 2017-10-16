@@ -2,23 +2,38 @@
 function fakeModule(testing) {
   var describe = testing.describe
   
+  describe('ok', function() {
+    it('passes', function() {
+      assertEquals(1, 1)
+    })
+    
+    it('is async', function() {
+      setTimeout(function() {
+        assertEquals(2, 2)
+      }, 200)
+    })
+  })
+  
   describe('module', function() {
     it('should be 4', function() {
       assertEquals(2+2, 4)
     })
     
     it('should fail', function() {
-      assertEquals(1+1, 3)
+      assertEquals(1+1, 3, 'Super long message ablav a fdsafdsaf ds fdsa fds afd safds afds afdsa')
     })
     
-    it('should fail', function(done) {
-      console.log('called')
+    it('should throw', function(done) {
       setTimeout(function() {
-        console.log('did')
-
         assertEquals('foo', 'bar')
         done()
       }, 200)
+    })
+  })
+  
+  describe('module2', function() {
+    it('should be 5', function() {
+      assertEquals(1, 5)
     })
   })
 }
@@ -26,6 +41,58 @@ function fakeModule(testing) {
 var testService = (function() {
   var isAdded = false
   var panel
+  
+  function addPanel(mount) {
+    var panel = document.createElement('div')
+    var style = document.createElement('style')
+    var toggle = document.createElement('button')
+    var container = document.createElement('div')
+
+    toggle.innerText = '='
+    toggle.className = 'toggle-button'
+    toggle.addEventListener('click', function(e) {
+      var isShowing = panel.style.marginRight == '0px'
+      panel.style.marginRight = isShowing ? '-300px' : '0px'
+    })
+    container.className = 'panel-container'
+
+    style.innerText = `
+  .panel {
+    background-color: white;
+    height: 100vh;
+    width: 300px;
+    position: fixed;
+    z-index: 10000;
+    top: 0;
+    right: 0;
+    margin-right: -300px;
+  }
+  .toggle-button {
+    position: absolute;
+    margin-left: -28px;
+    font-size: 1em;
+  }
+  .panel-container {
+    padding: 10px;
+    background-color: white;
+    height: 100vh;
+    overflow-y: scroll;
+  }
+  `
+    panel.className = 'panel'
+    panel.appendChild(toggle)
+    panel.appendChild(container)
+
+    if (!mount.appendChild) { mount = document.body }
+
+    mount.insertBefore(panel, mount.firstChild)
+    mount.insertBefore(style, mount.firstChild)
+
+    return {
+      panel: panel,
+      container: container,
+    }
+  }
   
   function addPanelIfNotExists() {
     if (isAdded) {
@@ -41,13 +108,10 @@ var testService = (function() {
     runButton.style.fontSize = '1em'
     runButton.addEventListener('click', run)
 
-    // div.innerText = 'hi'
-
     panel.panel.insertBefore(runButton, panel.container)
     panel.container.appendChild(div)
     
     panel.panel.style.boxShadow = '0 0 30px 0 lightgray'
-    // panel.panel.style.backgroundColor = 'pink'
   }
   
   var testSuites = []
@@ -57,82 +121,97 @@ var testService = (function() {
     
     var suite = {}
     
+    suite.title = title
     suite.asyncCount = 0
-    
     suite.cases = []
-    
     suite.defaultTimeout = 2000 // 2 seconds
     
     suite.run = function() {
       return new Promise(function(resolve, reject) {
         var results = []
         var doneCount = 0
+        var testmap = {}
         var isFinished = false
+        var testId = 0
+        var isCollected = {}
         
         function finish() {
+          for (var i = 0; i < testId; i++) {
+            if (!isCollected[i]) {
+              results.push({
+                isPass: false,
+                error: new Error('Timeout exceeded. Was `done()` called?'),
+                message: testmap[i].message,
+              })
+            }
+          }
           resolve(results)
         }
 
-        function makeDone() {
-          return function() {
+        function makeDone(id) {
+          return function done() {
+            // is success if this is called
             doneCount += 1
-            console.log('DONE', doneCount)
-
+            var test = testmap[id]
+            
+            isCollected[id] = true
+            results.push({
+              isPass: true,
+              error: null,
+              message: test.message,
+            })
+            
             checkDone()
           }
         }
 
         function checkDone() {
-          console.log(doneCount, suite.asyncCount)
-
           if (doneCount >= suite.asyncCount) {
             // finish
             isFinished = true
             finish()
           }
         }
-
+        
+        // If this timer finishes before isFinished is set to true
+        // one of the async callbacks were not called.
         setTimeout(function() {
           if (!isFinished) {
-            // finish(with error)
             isFinished = true
-            results.push({
-              isPass: false,
-              error: new Error('Timeout exceeded: ' + suite.defaultTimeout),
-              message: 'Timeout exceeded',
-            })
             finish()
           }
         }, suite.defaultTimeout)
 
         suite.cases.forEach(function(test) {
-          var error = null
-          var isPass = false
-          var donecb = makeDone()
-// console.log(test)
-          try {
-            if (test.isAsync) {
-              console.log()
-              test.callback(donecb)
-            } else {
-              test.callback()
-            }
-            isPass = true
-          } catch(e) {
-            error = e
-            if (test.isAsync) {
-              donecb()
-            }
-            console.log(e.toString())
-          }
+          var id = testId++
+          testmap[id] = test
 
-          results.push({
-            isPass: isPass,
-            error: error,
-            message: test.message
-          })
+          // MARK: register async funcs separately
+          if (test.isAsync) {
+            var donecb = makeDone(id)
+            test.callback(donecb)
+            
+          } else {
+            var isPass = false
+            var error = null
+            
+            try {
+              test.callback()
+              isPass = true
+            } catch(e) {
+              error = e
+            }
+            
+            isCollected[id] = true
+            results.push({
+              isPass: isPass,
+              error: error,
+              message: test.message,
+            })
+          }
         })
         
+        // Call once in the case that all tests are sync
         checkDone()
 
         return results
@@ -155,10 +234,11 @@ var testService = (function() {
     
     /// Add assertions to describe's scope context 
     
-    this.assertEquals = function(actual, expected) {
+    this.assertEquals = function(actual, expected, message) {
+      message = message || (actual.toString() + ' != ' + expected.toString())
       if (actual != expected) {
         console.log(this.name)
-        throw new Error(actual.toString() + ' != ' + expected.toString())
+        throw new Error(message)
       }
     }
     
@@ -185,35 +265,75 @@ var testService = (function() {
     title.style.display = 'inline-block'
     title.style.margin = '0'
     title.style.color = test.isPass ? 'green' : 'red'
+
+    header.style.cursor = 'pointer'
     header.appendChild(title)
     details.appendChild(header)
     
-    var trace = document.createElement('pre')
-    trace.innerText = test.error && test.error.stack
-    trace.style.overflowX = 'scroll'
-    trace.style.backgroundColor = 'rgba(0,0,0,0.2)'
-    details.appendChild(trace)
+    if (test.error) {
+      var reason = document.createElement('div')
+      var trace = document.createElement('pre')
+      reason.innerText = test.error.message
+      reason.style.marginLeft = '18px'
+
+      trace.innerText = test.error.stack
+      trace.style.overflowX = 'scroll'
+      trace.style.backgroundColor = 'rgba(0,0,0,0.2)'
+      trace.style.margin = '4px 0px 4px 18px'
+      details.appendChild(reason)
+      details.appendChild(trace)
+    }
     
     return details
   }
   
+  // `run()` is the test runner start trigger.
   function run() {
-    var results = []
+    var results = {}
+    var counts = 0
     
-    testSuites
-      .map(function(s) { return s.run() })
-      .reduce(function(curr, next) {
-        curr.then(next)
-        return Promise.resolve()
-      })
-      .then(function(res) {
-        var container = document.createElement('div')
-        res.forEach(function(r) {
-          var rendered = renderTest(r)
-          container.appendChild(rendered)
+    function renderResults() {
+      var container = document.createElement('div')
+      
+      Object.keys(results)
+        .sort(function(a, b) { return +a - +b })
+        .map(function(k) { return results[k] })
+        .forEach(function(test) {
+          var header = document.createElement('div')
+          var title = document.createElement('h4')
+          title.style.marginBottom = 0
+          title.innerText = test.suite.title || 'title'
+          header.appendChild(title)
+
+          test.results.forEach(function(r) {
+            var rendered = renderTest(r)
+            header.appendChild(rendered)
+          })
+          container.appendChild(header)
         })
-        addToContainer(container)
-      })
+      
+      addToContainer(container)
+    }
+    
+    function checkDone() {
+      if (counts >= testSuites.length) {
+        console.log('done', Object.keys(results))
+        renderResults()
+      }
+    }
+    
+    testSuites.forEach(function(suite, i) {
+      suite.run()
+        .then(function(res) {
+          results[i] = {
+            results: res,
+            suite: suite,
+          }
+        
+          counts++
+          checkDone()
+        })
+    })
   }
   
   return {
@@ -221,5 +341,5 @@ var testService = (function() {
   }
 })()
 
+// Test using fake module
 fakeModule(testService)
-
