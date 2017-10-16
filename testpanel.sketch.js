@@ -1,4 +1,7 @@
+// testpanel.js
+// (c) 2017 Matthew Tso
 
+// Fake module for testing service injection.
 function fakeModule(testing) {
   var describe = testing.describe
   
@@ -39,9 +42,12 @@ function fakeModule(testing) {
 }
 
 var testService = (function() {
-  var isAdded = false
+  // TODO: check for window.__DEV__ flag
+  
+  var isAdded = false // Add panel once only
   var panel
   
+  // Builds the panel element and adds it to the mount node
   function addPanel(mount) {
     var panel = document.createElement('div')
     var style = document.createElement('style')
@@ -57,28 +63,28 @@ var testService = (function() {
     container.className = 'panel-container'
 
     style.innerText = `
-  .panel {
-    background-color: white;
-    height: 100vh;
-    width: 300px;
-    position: fixed;
-    z-index: 10000;
-    top: 0;
-    right: 0;
-    margin-right: -300px;
-  }
-  .toggle-button {
-    position: absolute;
-    margin-left: -28px;
-    font-size: 1em;
-  }
-  .panel-container {
-    padding: 10px;
-    background-color: white;
-    height: 100vh;
-    overflow-y: scroll;
-  }
-  `
+      .panel {
+        background-color: white;
+        height: 100vh;
+        width: 300px;
+        position: fixed;
+        z-index: 10000;
+        top: 0;
+        right: 0;
+        margin-right: -300px;
+      }
+      .toggle-button {
+        position: absolute;
+        margin-left: -28px;
+        font-size: 1em;
+      }
+      .panel-container {
+        padding: 10px;
+        background-color: white;
+        height: 100vh;
+        overflow-y: scroll;
+      }`
+    
     panel.className = 'panel'
     panel.appendChild(toggle)
     panel.appendChild(container)
@@ -261,6 +267,7 @@ var testService = (function() {
     
     var message = test.isPass ? 'passed: ' : 'FAILED: '
     message += test.message
+    
     title.innerText = message
     title.style.display = 'inline-block'
     title.style.margin = '0'
@@ -270,16 +277,19 @@ var testService = (function() {
     header.appendChild(title)
     details.appendChild(header)
     
+    // Render stack trace and error message
     if (test.error) {
       var reason = document.createElement('div')
       var trace = document.createElement('pre')
+      
       reason.innerText = test.error.message
       reason.style.marginLeft = '18px'
-
+      
       trace.innerText = test.error.stack
       trace.style.overflowX = 'scroll'
       trace.style.backgroundColor = 'rgba(0,0,0,0.2)'
       trace.style.margin = '4px 0px 4px 18px'
+      
       details.appendChild(reason)
       details.appendChild(trace)
     }
@@ -292,36 +302,40 @@ var testService = (function() {
     var results = {}
     var counts = 0
     
+    // Add results to panel
     function renderResults() {
       var container = document.createElement('div')
       
+      function renderSuite(test) {
+        var header = document.createElement('div')
+        var title = document.createElement('h4')
+
+        header.appendChild(title)
+        title.style.marginBottom = 0
+        title.innerText = test.suite.title || 'title'
+        test.results.forEach(function(r) {
+          var rendered = renderTest(r)
+          header.appendChild(rendered)
+        })
+
+        container.appendChild(header)
+      }
+
       Object.keys(results)
         .sort(function(a, b) { return +a - +b })
         .map(function(k) { return results[k] })
-        .forEach(function(test) {
-          var header = document.createElement('div')
-          var title = document.createElement('h4')
-          title.style.marginBottom = 0
-          title.innerText = test.suite.title || 'title'
-          header.appendChild(title)
-
-          test.results.forEach(function(r) {
-            var rendered = renderTest(r)
-            header.appendChild(rendered)
-          })
-          container.appendChild(header)
-        })
+        .forEach(renderSuite)
       
       addToContainer(container)
     }
     
     function checkDone() {
       if (counts >= testSuites.length) {
-        console.log('done', Object.keys(results))
         renderResults()
       }
     }
     
+    // Start each test suite sequentially
     testSuites.forEach(function(suite, i) {
       suite.run()
         .then(function(res) {
@@ -336,6 +350,9 @@ var testService = (function() {
     })
   }
   
+  // Service object definition
+  // `it` test case registrar and `assert*`s
+  // are available in describe's context.
   return {
     describe: describe,
   }
