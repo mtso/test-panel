@@ -41,6 +41,10 @@ function fakeModule(testing) {
   })
 }
 
+// PURPOSE: Attach a behavior-driven testing service to the page on the
+//          client-side. Supports simple test case execution using both
+//          synchronous and asynchronously executed test functions that
+//          catch thrown exceptions.
 var testService = (function() {
   // TODO: check for window.__DEV__ flag
   
@@ -63,27 +67,27 @@ var testService = (function() {
     container.className = 'panel-container'
 
     style.innerText = `
-      .panel {
-        background-color: white;
-        height: 100vh;
-        width: 300px;
-        position: fixed;
-        z-index: 10000;
-        top: 0;
-        right: 0;
-        margin-right: -300px;
-      }
-      .toggle-button {
-        position: absolute;
-        margin-left: -28px;
-        font-size: 1em;
-      }
-      .panel-container {
-        padding: 10px;
-        background-color: white;
-        height: 100vh;
-        overflow-y: scroll;
-      }`
+    .panel {
+      background-color: white;
+      height: 100vh;
+      width: 300px;
+      position: fixed;
+      z-index: 10000;
+      top: 0;
+      right: 0;
+      margin-right: -300px;
+    }
+    .toggle-button {
+      position: absolute;
+      margin-left: -28px;
+      font-size: 1em;
+    }
+    .panel-container {
+      padding: 10px;
+      background-color: white;
+      height: 100vh;
+      overflow-y: scroll;
+    }`
     
     panel.className = 'panel'
     panel.appendChild(toggle)
@@ -94,12 +98,14 @@ var testService = (function() {
     mount.insertBefore(panel, mount.firstChild)
     mount.insertBefore(style, mount.firstChild)
 
+    // Return a reference to both the panel and content container.
     return {
       panel: panel,
       container: container,
     }
   }
   
+  // Add the panel UI once
   function addPanelIfNotExists() {
     if (isAdded) {
       return
@@ -112,7 +118,7 @@ var testService = (function() {
     var runButton = document.createElement('button')
     runButton.innerText = 'Run'
     runButton.style.fontSize = '1em'
-    runButton.addEventListener('click', run)
+    runButton.addEventListener('click', runSuites)
 
     panel.panel.insertBefore(runButton, panel.container)
     panel.container.appendChild(div)
@@ -122,15 +128,19 @@ var testService = (function() {
   
   var testSuites = []
   
-  function describe(title, registerCases) {
+  // Describes and registers a new suite of test cases.
+  // `it` and `asserts` will be available within the 
+  // callback's context.
+  function describe(title, registerCases, options) {
     addPanelIfNotExists()
+    options = options || {}
     
     var suite = {}
     
     suite.title = title
     suite.asyncCount = 0
     suite.cases = []
-    suite.defaultTimeout = 2000 // 2 seconds
+    suite.defaultTimeout = options.timeout || 2000 // 2 seconds
     
     suite.run = function() {
       return new Promise(function(resolve, reject) {
@@ -154,6 +164,7 @@ var testService = (function() {
           resolve(results)
         }
 
+        // Create a callback that ends the test case for the given id (index)
         function makeDone(id) {
           return function done() {
             // is success if this is called
@@ -223,9 +234,9 @@ var testService = (function() {
         return results
       })
     }
-          
+
     testSuites.push(suite)
-    
+
     this.it = function(message, callback) {
       var isAsync = callback.length > 0
       if (isAsync) {
@@ -238,19 +249,20 @@ var testService = (function() {
       })
     }
     
-    /// Add assertions to describe's scope context 
+    // Add assertions to describe's scope context 
+    this.assertEquals = assertEquals
+    this.assertArrayEquals = assertArrayEquals
+    this.assertNotEquals = assertNotEquals
+    this.assertThrows = assertThrows
     
-    this.assertEquals = function(actual, expected, message) {
-      message = message || (actual.toString() + ' != ' + expected.toString())
-      if (actual != expected) {
-        console.log(this.name)
-        throw new Error(message)
-      }
-    }
-    
+    // Run the registration handler with this scope
+    // (which contains the `it` and `asserts`)
     registerCases.bind(this)()
   }
   
+  // MARK: Render Functions
+  //       Adds results to the UI.
+
   function addToContainer(content) {
     while(panel.container.childNodes.length > 0) {
       panel.container.removeChild(panel.container.firstChild)
@@ -296,49 +308,51 @@ var testService = (function() {
     
     return details
   }
+    
+  // Add results to panel
+  function renderResults() {
+    var container = document.createElement('div')
+    
+    function renderSuite(test) {
+      var header = document.createElement('div')
+      var title = document.createElement('h4')
+
+      header.appendChild(title)
+      title.style.marginBottom = 0
+      title.innerText = test.suite.title || 'title'
+      test.results.forEach(function(r) {
+        var rendered = renderTest(r)
+        header.appendChild(rendered)
+      })
+
+      container.appendChild(header)
+    }
+
+    Object.keys(results)
+      .sort(function(a, b) { return +a - +b })
+      .map(function(k) { return results[k] })
+      .forEach(renderSuite)
+    
+    addToContainer(container)
+  }
   
-  // `run()` is the test runner start trigger.
-  function run() {
+  // Run button click handler.
+  // `runSuites()` is the test runner start trigger.
+  function runSuites() {
     var results = {}
     var counts = 0
-    
-    // Add results to panel
-    function renderResults() {
-      var container = document.createElement('div')
-      
-      function renderSuite(test) {
-        var header = document.createElement('div')
-        var title = document.createElement('h4')
 
-        header.appendChild(title)
-        title.style.marginBottom = 0
-        title.innerText = test.suite.title || 'title'
-        test.results.forEach(function(r) {
-          var rendered = renderTest(r)
-          header.appendChild(rendered)
-        })
-
-        container.appendChild(header)
-      }
-
-      Object.keys(results)
-        .sort(function(a, b) { return +a - +b })
-        .map(function(k) { return results[k] })
-        .forEach(renderSuite)
-      
-      addToContainer(container)
-    }
-    
     function checkDone() {
       if (counts >= testSuites.length) {
         renderResults()
       }
     }
     
-    // Start each test suite sequentially
+    // Start each test suite sequentially.
     testSuites.forEach(function(suite, i) {
       suite.run()
         .then(function(res) {
+          // Add result to table on the suite level.
           results[i] = {
             results: res,
             suite: suite,
@@ -356,6 +370,55 @@ var testService = (function() {
   return {
     describe: describe,
   }
+
+  // MARK: Assertions
+
+  function assertEquals(actual, expected, message) {
+    message = message || (actual.toString() + ' should equal ' + expected.toString())
+    if (actual != expected) {
+      throw new Error(message)
+    }
+  }
+
+  // Asserts that the contents of two arrays are equal.
+  function assertArrayEquals(actual, expected, message) {
+    var areEqualLengths = actual.length === expected.length
+    var areEqualItems = expected.every(function(item, index) {
+      return item == actual[index]
+    })
+    if (!(areEqualLengths && areEqualItems)) {
+      message = message || (actual.toString() + ' should equal ' + expected.toString())
+      throw new Error(message)
+    }
+  }
+
+  function assertNotEquals(actual, expected, message) {
+    message = message || (actual.toString() + ' should not equal ' + expected.toString())
+    if (actual == expected) {
+      throw new Error(message)
+    }
+  }
+
+  // Asserts that the callback will throw. Throws an exception if
+  // no exception was caught.
+  function assertThrows(callback, arguments, message) {
+    message = message
+      || (callback.name && ('Expected ' + callback.name + ' to throw'))
+      || ('Expected ' + callback.toString().split('(')[0] + ' to throw')
+    arguments = arguments || []
+
+    if (typeof arguments === 'string') {
+      message = arguments
+      arguments = []
+    }
+    try {
+      callback.apply(null, arguments)
+    } catch(_) {
+      return
+    }
+    throw new Error(message)
+  }
+
 })()
 
 // Test using fake module
