@@ -1,56 +1,15 @@
 // testpanel.js
 // (c) 2017 Matthew Tso
-
-// Fake module for testing service injection.
-function fakeModule(testing) {
-  var describe = testing.describe
-  
-  describe('ok', function() {
-    it('passes', function() {
-      assertEquals(1, 1)
-    })
-    
-    it('is async', function() {
-      setTimeout(function() {
-        assertEquals(2, 2)
-      }, 200)
-    })
-  })
-  
-  describe('module', function() {
-    it('should be 4', function() {
-      assertEquals(2+2, 4)
-    })
-    
-    it('should fail', function() {
-      assertEquals(1+1, 3, 'Super long message ablav a fdsafdsaf ds fdsa fds afd safds afds afdsa')
-    })
-    
-    it('should throw', function(done) {
-      setTimeout(function() {
-        assertEquals('foo', 'bar')
-        done()
-      }, 200)
-    })
-  })
-  
-  describe('module2', function() {
-    it('should be 5', function() {
-      assertEquals(1, 5)
-    })
-  })
-}
-
 // PURPOSE: Attach a behavior-driven testing service to the page on the
 //          client-side. Supports simple test case execution using both
 //          synchronous and asynchronously executed test functions that
 //          catch thrown exceptions.
-var testService = (function() {
+window.__testService__ = (function() {
   // TODO: check for window.__DEV__ flag
-  
+
   var isAdded = false // Add panel once only
   var panel
-  
+
   // Builds the panel element and adds it to the mount node
   function addPanel(mount) {
     var panel = document.createElement('div')
@@ -67,36 +26,49 @@ var testService = (function() {
     container.className = 'panel-container'
 
     style.innerText = `
-    .panel {
-      background-color: white;
-      height: 100vh;
-      width: 300px;
-      position: fixed;
-      z-index: 10000;
-      top: 0;
-      right: 0;
-      margin-right: -300px;
-    }
-    .toggle-button {
-      position: absolute;
-      margin-left: -28px;
-      font-size: 1em;
-    }
-    .panel-container {
-      padding: 10px;
-      background-color: white;
-      height: 100vh;
-      overflow-y: scroll;
-    }`
-    
+      .panel {
+        background-color: white;
+        height: 100vh;
+        width: 300px;
+        position: fixed;
+        z-index: 10000;
+        top: 0;
+        right: 0;
+        margin-right: -300px;
+      }
+      .toggle-button {
+        position: absolute;
+        margin-left: -28px;
+        font-size: 1em;
+      }
+      .panel-container {
+        padding: 10px;
+        background-color: white;
+        height: 100vh;
+        overflow-y: scroll;
+      }`
+
     panel.className = 'panel'
     panel.appendChild(toggle)
     panel.appendChild(container)
 
-    if (!mount.appendChild) { mount = document.body }
+    if (!mount.appendChild) {
+      mount = document.body
+    }
 
     mount.insertBefore(panel, mount.firstChild)
     mount.insertBefore(style, mount.firstChild)
+
+    window.addEventListener('click', function(e) {
+      var bounds = toggle.getBoundingClientRect()
+
+      var isInX = e.clientX > bounds.left && e.clientX < bounds.right
+      var isInY = e.clientY > bounds.top && e.clientY < bounds.bottom
+
+      if (isInX && isInY) {
+        toggle.click()
+      }
+    })
 
     // Return a reference to both the panel and content container.
     return {
@@ -104,15 +76,16 @@ var testService = (function() {
       container: container,
     }
   }
-  
-  // Add the panel UI once
+
+  // Add the panel UI once.
   function addPanelIfNotExists() {
     if (isAdded) {
       return
     }
     isAdded = true
-    
-    panel = addPanel(document.querySelector('#mount'))
+
+    // MARK: Mount point for panel UI.
+    panel = addPanel(document.body)
 
     var div = document.createElement('div')
     var runButton = document.createElement('button')
@@ -122,26 +95,37 @@ var testService = (function() {
 
     panel.panel.insertBefore(runButton, panel.container)
     panel.container.appendChild(div)
-    
-    panel.panel.style.boxShadow = '0 0 30px 0 lightgray'
+
+    panel.panel.style.borderLeft = '1px solid gray'
+
+    window.addEventListener('click', function(e) {
+      var bounds = runButton.getBoundingClientRect()
+
+      var isInX = e.clientX > bounds.left && e.clientX < bounds.right
+      var isInY = e.clientY > bounds.top && e.clientY < bounds.bottom
+
+      if (isInX && isInY) {
+        runButton.click()
+      }
+    })
   }
-  
-  var testSuites = []
-  
+
+  var testSuites = {}
+
   // Describes and registers a new suite of test cases.
   // `it` and `asserts` will be available within the 
   // callback's context.
   function describe(title, registerCases, options) {
     addPanelIfNotExists()
     options = options || {}
-    
+
     var suite = {}
-    
+
     suite.title = title
     suite.asyncCount = 0
     suite.cases = []
     suite.defaultTimeout = options.timeout || 2000 // 2 seconds
-    
+
     suite.run = function() {
       return new Promise(function(resolve, reject) {
         var results = []
@@ -150,7 +134,7 @@ var testService = (function() {
         var isFinished = false
         var testId = 0
         var isCollected = {}
-        
+
         function finish() {
           for (var i = 0; i < testId; i++) {
             if (!isCollected[i]) {
@@ -170,14 +154,14 @@ var testService = (function() {
             // is success if this is called
             doneCount += 1
             var test = testmap[id]
-            
+
             isCollected[id] = true
             results.push({
               isPass: true,
               error: null,
               message: test.message,
             })
-            
+
             checkDone()
           }
         }
@@ -189,7 +173,7 @@ var testService = (function() {
             finish()
           }
         }
-        
+
         // If this timer finishes before isFinished is set to true
         // one of the async callbacks were not called.
         setTimeout(function() {
@@ -201,24 +185,24 @@ var testService = (function() {
 
         suite.cases.forEach(function(test) {
           var id = testId++
-          testmap[id] = test
+            testmap[id] = test
 
           // MARK: register async funcs separately
           if (test.isAsync) {
             var donecb = makeDone(id)
             test.callback(donecb)
-            
+
           } else {
             var isPass = false
             var error = null
-            
+
             try {
               test.callback()
               isPass = true
-            } catch(e) {
+            } catch (e) {
               error = e
             }
-            
+
             isCollected[id] = true
             results.push({
               isPass: isPass,
@@ -227,7 +211,7 @@ var testService = (function() {
             })
           }
         })
-        
+
         // Call once in the case that all tests are sync
         checkDone()
 
@@ -235,7 +219,7 @@ var testService = (function() {
       })
     }
 
-    testSuites.push(suite)
+    testSuites[title] = suite
 
     this.it = function(message, callback) {
       var isAsync = callback.length > 0
@@ -248,38 +232,38 @@ var testService = (function() {
         isAsync: isAsync,
       })
     }
-    
+
     // Add assertions to describe's scope context 
     this.assertEquals = assertEquals
-    this.assertArrayEquals = assertArrayEquals
+    this.assertArraysEqual = assertArraysEqual
     this.assertNotEquals = assertNotEquals
     this.assertThrows = assertThrows
-    
+
     // Run the registration handler with this scope
     // (which contains the `it` and `asserts`)
     registerCases.bind(this)()
   }
-  
+
   // MARK: Render Functions
   //       Adds results to the UI.
 
   function addToContainer(content) {
-    while(panel.container.childNodes.length > 0) {
+    while (panel.container.childNodes.length > 0) {
       panel.container.removeChild(panel.container.firstChild)
     }
-    
+
     panel.container.appendChild(content)
   }
-  
+
   function renderTest(test) {
     test = test || {}
     var details = document.createElement('details')
     var header = document.createElement('summary')
     var title = document.createElement('pre')
-    
+
     var message = test.isPass ? 'passed: ' : 'FAILED: '
     message += test.message
-    
+
     title.innerText = message
     title.style.display = 'inline-block'
     title.style.margin = '0'
@@ -288,31 +272,31 @@ var testService = (function() {
     header.style.cursor = 'pointer'
     header.appendChild(title)
     details.appendChild(header)
-    
+
     // Render stack trace and error message
     if (test.error) {
       var reason = document.createElement('div')
       var trace = document.createElement('pre')
-      
+
       reason.innerText = test.error.message
       reason.style.marginLeft = '18px'
-      
+
       trace.innerText = test.error.stack
       trace.style.overflowX = 'scroll'
       trace.style.backgroundColor = 'rgba(0,0,0,0.2)'
       trace.style.margin = '4px 0px 4px 18px'
-      
+
       details.appendChild(reason)
       details.appendChild(trace)
     }
-    
+
     return details
   }
-    
+
   // Add results to panel
-  function renderResults() {
+  function renderResults(results) {
     var container = document.createElement('div')
-    
+
     function renderSuite(test) {
       var header = document.createElement('div')
       var title = document.createElement('h4')
@@ -329,13 +313,17 @@ var testService = (function() {
     }
 
     Object.keys(results)
-      .sort(function(a, b) { return +a - +b })
-      .map(function(k) { return results[k] })
+      .sort(function(a, b) {
+        return +a - +b
+      })
+      .map(function(k) {
+        return results[k]
+      })
       .forEach(renderSuite)
-    
+
     addToContainer(container)
   }
-  
+
   // Run button click handler.
   // `runSuites()` is the test runner start trigger.
   function runSuites() {
@@ -343,27 +331,31 @@ var testService = (function() {
     var counts = 0
 
     function checkDone() {
-      if (counts >= testSuites.length) {
-        renderResults()
+      if (counts >= Object.keys(testSuites).length) {
+        renderResults(results)
       }
     }
-    
+
     // Start each test suite sequentially.
-    testSuites.forEach(function(suite, i) {
-      suite.run()
-        .then(function(res) {
-          // Add result to table on the suite level.
-          results[i] = {
-            results: res,
-            suite: suite,
-          }
-        
-          counts++
-          checkDone()
-        })
-    })
+    Object.keys(testSuites)
+      .map(function(title) {
+        return testSuites[title]
+      })
+      .forEach(function(suite, i) {
+        suite.run()
+          .then(function(res) {
+            // Add result to table on the suite level.
+            results[i] = {
+              results: res,
+              suite: suite,
+            }
+
+            counts++
+            checkDone()
+          })
+      })
   }
-  
+
   // Service object definition
   // `it` test case registrar and `assert*`s
   // are available in describe's context.
@@ -374,14 +366,14 @@ var testService = (function() {
   // MARK: Assertions
 
   function assertEquals(actual, expected, message) {
-    message = message || (actual.toString() + ' should equal ' + expected.toString())
+    message = message || ('"' + actual + '" should equal "' + expected + '"')
     if (actual != expected) {
       throw new Error(message)
     }
   }
 
   // Asserts that the contents of two arrays are equal.
-  function assertArrayEquals(actual, expected, message) {
+  function assertArraysEqual(actual, expected, message) {
     var areEqualLengths = actual.length === expected.length
     var areEqualItems = expected.every(function(item, index) {
       return item == actual[index]
@@ -402,9 +394,9 @@ var testService = (function() {
   // Asserts that the callback will throw. Throws an exception if
   // no exception was caught.
   function assertThrows(callback, arguments, message) {
-    message = message
-      || (callback.name && ('Expected ' + callback.name + ' to throw'))
-      || ('Expected ' + callback.toString().split('(')[0] + ' to throw')
+    message = message ||
+      (callback.name && ('Expected ' + callback.name + ' to throw')) ||
+      ('Expected ' + callback.toString().split('(')[0] + ' to throw')
     arguments = arguments || []
 
     if (typeof arguments === 'string') {
@@ -413,7 +405,7 @@ var testService = (function() {
     }
     try {
       callback.apply(null, arguments)
-    } catch(_) {
+    } catch (_) {
       return
     }
     throw new Error(message)
@@ -421,5 +413,4 @@ var testService = (function() {
 
 })()
 
-// Test using fake module
-fakeModule(testService)
+window.describe = window.__testService__.describe
